@@ -1,5 +1,18 @@
 #pragma once
 
+/*
+
+Pipeline
+-> grayscale
+-> resize to 32x32
+-> DCT
+-> top-left 8x8
+-> remove DC
+-> median
+-> hash
+
+*/
+
 #include <vector>
 #include <cstdint>
 #include <cmath>
@@ -17,32 +30,42 @@ using ColorImage = std::vector<std::vector<Pixel>>;
 
 class PHash {
     private:
-        // Step 1: Resize image to 32×32
+        // Resize image to 32×32
+        ImageGrid readImage(std::string_view path);
+        ColorImage readImage(std::string_view path);
+
+        // Resize image to 32×32
         ImageGrid resizeImage(const ImageGrid& input);
 
-        // Step 2: Convert to grayscale
+        // Convert to grayscale if gray scale
         ImageGrid convertToGrayscale(const ImageGrid& input);
 
-        // Step 3: Convert to float
+        // Convert to grayscale if color image
+        ImageGrid convertToGrayscale(const ColorImage& input);
+
+        // Convert to float
         ImageGrid convertToFloat(const ImageGrid& input);
 
-        // Step 4: Apply DCT
+        // Apply Descrete Cosine Transform
         ImageGrid applyDCT(const ImageGrid& input);
 
-        // Step 5: Keep top-left 8×8 block
+        // Keep top-left 8×8 block
         ImageGrid extractTopLeft8x8(const ImageGrid& dctMat);
 
-        // Step 6: Ignore the DC coefficient
+        // Ignore the DC coefficient
         std::vector<float> flattenAndIgnoreDC(const ImageGrid& block8x8);
 
-        // Step 7: Compute median
+        // Compute median
         float computeMedian(std::vector<float> values);
 
-        // Step 8: Generate binary hash
+        // Generate binary hash
         uint64_t generateBinaryHash(const std::vector<float>& coefficients, float median);
 
     public:
         PHash();
         ~PHash();
+
+        uint64_t getPHash();
+
 };
 
