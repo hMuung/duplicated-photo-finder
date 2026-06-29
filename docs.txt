@@ -1,0 +1,80 @@
+Perceptual Hash brift overview
+
+pHash is designed to capture the visual structure of an image, not its exact pixels
+It does this by analyzing the low-frequency information of the image using the 
+Discrete Cosine Transform (DCT)
+
+Why DCT?
+
+An image contains:
+Low frequencies -> general shapes, lighting, large structures
+High frequencies -> edges, noise, fine details
+
+pHash keeps only low frequencies because they survive:
+* resizing
+* compression
+* slight blurring
+* minor color changes
+
+#Full pipeline
+
+Step 1: Resize image to 32×32
+    -Fixed input size
+    -Removes irrelevant detail
+
+Step 2: Convert to grayscale
+    Color usually adds noise for similarity matching.
+
+Step 3: Convert to float
+    DCT operates on floating-point values:
+
+Step 4: Apply DCT
+    DCT converts spatial data into frequency data
+
+    Structure:
+    +-------------------------+
+    | DC | low | low | ...    |
+    | low| low | mid | ...    |
+    | low| mid | high| ...    |
+    | ...                     |
+    +-------------------------+
+    Top-left = lowest frequencies.
+    Bottom-right = highest frequencies.
+
+Step 5: Keep top-left 8×8 block
+    Because DCT orders frequencies from low to high
+    the top left values are the most significant patterns
+
+
+Step 6: Ignore the DC coefficient
+    The DC coefficient: dct(0,0), represents overall brightness
+    and if image brightness changes DC changes a lot but the 
+    image is still visually the same
+
+Step 7: Compute median
+    Because mean is sensitive to outliers, median is more stable
+
+Step 8: Generate binary hash
+    For each coefficient:
+    hashBit = (coeff > median) ? 1 : 0;
+
+# Practical thresholds
+
+64-bit pHash:
+
+```text
+0–5   → nearly identical
+6–10  → strong match
+11–15 → possible match
+16+   → usually different
+```
+
+---
+
+For large databases, pHash is often combined with:
+
+* BK-trees
+* VP-trees
+* LSH (Locality Sensitive Hashing)
+
+to search millions of hashes efficiently.
