@@ -1,11 +1,14 @@
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb/stb_image.h"
-
 #include "dpf/PHash.h"
+#include "dpf/Logger.h"
 
 #include <cmath>
 #include <algorithm>
-#include <stdexcept>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
+
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb/stb_image_resize2.h"
 
 PHash::PHash() {
     initCosTable();
@@ -13,77 +16,77 @@ PHash::PHash() {
 
 PHash::~PHash() {}
 
+// Save a cosine Look Up Table
 void PHash::initCosTable() {
     constexpr float PI = 3.14159265358979323846f;
 
     for (int u = 0; u < 32; ++u) {
         for (int x = 0; x < 32; ++x) {
-            cosTable[u][x] =
-                std::cos(((2.0f * x + 1.0f) * u * PI) / 64.0f);
+            cosTable[u][x] = std::cos(((2.0f*x + 1.0f)*u*PI) / 64.0f);
         }
     }
 }
 
-uint64_t PHash::getPHash(std::string_view path) {
-    auto img = readAndResize(path);
-    auto dct = applyDCT(img);
-    auto block = extractTopLeft8x8(dct);
-    auto coeffs = flattenAndIgnoreDC(block);
+// Main pipeline to get the hash
+uint64_t PHash::getPHash(const char* path) {
+    std::string errorMessage;
+
+    auto img = readAndResize(path, errorMessage);
+
+    if (!img.has_value()) {
+        // Send message to log
+        Logger::logError(errorMessage);
+        // Return 0 to indicate failure
+        return 0ULL; 
+    }
+
+    ImageGrid32 dct = applyDCT(img.value());
+    ImageGrid8 block = extractTopLeft8x8(dct);
+    CoeffArray coeffs = flattenAndIgnoreDC(block);
     float median = computeMedian(coeffs);
 
     return generateBinaryHash(coeffs, median);
 }
 
-ImageGrid32 PHash::readAndResize(std::string_view path) {
+// Reads, resizes, and converts the image to grayscale
+std::optional<ImageGrid32> PHash::readAndResize(const char* path, std::string& errorOut) {
     int width, height, channels;
-
-    unsigned char* data = stbi_load(
-        path.data(),
-        &width,
-        &height,
-        &channels,
-        0
-    );
+    
+    // Force STB to load imagen in 1 canal at loading
+    unsigned char* data = stbi_load(path, &width, &height, &channels, 1);
 
     if (!data) {
-        throw std::runtime_error("Failed to load image");
+        // Save specific error
+        errorOut = "Failed to load image [" + std::string(path) + "]: STBI could not read the file.";
+        return std::nullopt; // Return a void optional indicating failure
     }
 
-    ImageGrid32 output{};
+    // Create 32x32 bytes temporal buffer
+    unsigned char resizedData[32 * 32];
 
+    // Resize
+    stbir_resize_uint8_linear(data, width, height, 0, resizedData, 32, 32, 0, STBIR_1CHANNEL);
+
+    // Free Image from memory
+    stbi_image_free(data);
+
+    // Save data in ImageGrid32 format
+    ImageGrid32 output{};
     for (int y = 0; y < 32; ++y) {
         for (int x = 0; x < 32; ++x) {
-            int srcY = (y * height) / 32;
-            int srcX = (x * width) / 32;
-
-            int idx = (srcY * width + srcX) * channels;
-
-            float gray = 0.0f;
-
-            if (channels == 1) {
-                gray = static_cast<float>(data[srcY * width + srcX]);
-            } else {
-                uint8_t r = data[idx];
-                uint8_t g = data[idx + 1];
-                uint8_t b = data[idx + 2];
-
-                gray = 0.299f * r + 0.587f * g + 0.114f * b;
-            }
-
-            output[y][x] = gray;
+            output[y][x] = static_cast<float>(resizedData[y * 32 + x]);
         }
     }
-
-    stbi_image_free(data);
 
     return output;
 }
 
+// Discrete Cosine Transform application
 ImageGrid32 PHash::applyDCT(const ImageGrid32& input) {
     ImageGrid32 temp{};
     ImageGrid32 output{};
 
-    // DCT filas
+    // DCT rows
     for (int y = 0; y < 32; ++y) {
         for (int u = 0; u < 32; ++u) {
             float sum = 0.0f;
@@ -92,14 +95,13 @@ ImageGrid32 PHash::applyDCT(const ImageGrid32& input) {
                 sum += input[y][x] * cosTable[u][x];
             }
 
-            float cu = (u == 0) ? std::sqrt(1.0f / 32.0f)
-                                : std::sqrt(2.0f / 32.0f);
+            float cu = (u == 0) ? std::sqrt(1.0f / 32.0f) : std::sqrt(2.0f / 32.0f);
 
             temp[y][u] = cu * sum;
         }
     }
 
-    // DCT columnas
+    // DCT columns
     for (int x = 0; x < 32; ++x) {
         for (int v = 0; v < 32; ++v) {
             float sum = 0.0f;
@@ -108,8 +110,7 @@ ImageGrid32 PHash::applyDCT(const ImageGrid32& input) {
                 sum += temp[y][x] * cosTable[v][y];
             }
 
-            float cv = (v == 0) ? std::sqrt(1.0f / 32.0f)
-                                : std::sqrt(2.0f / 32.0f);
+            float cv = (v == 0) ? std::sqrt(1.0f / 32.0f) : std::sqrt(2.0f / 32.0f);
 
             output[v][x] = cv * sum;
         }
@@ -118,6 +119,7 @@ ImageGrid32 PHash::applyDCT(const ImageGrid32& input) {
     return output;
 }
 
+// Extract top-left 8x8 low frequencies
 ImageGrid8 PHash::extractTopLeft8x8(const ImageGrid32& dctMat) {
     ImageGrid8 block{};
 
@@ -130,28 +132,29 @@ ImageGrid8 PHash::extractTopLeft8x8(const ImageGrid32& dctMat) {
     return block;
 }
 
+// Ignores DC coefficient and changes the 2d array to a 1d array
 CoeffArray PHash::flattenAndIgnoreDC(const ImageGrid8& block) {
     CoeffArray coeffs{};
 
-    int idx = 0;
+    //A two-dimensional static array stores its data in contiguous memory space
 
-    for (int y = 0; y < 8; ++y) {
-        for (int x = 0; x < 8; ++x) {
-            if (y == 0 && x == 0)
-                continue;
+    // Point to the first element of the matrix
+    const float* src = &block[0][0];
 
-            coeffs[idx++] = block[y][x];
-        }
+    for (int i = 0; i < 63; ++i) {
+        coeffs[i] = src[i + 1]; // i + 1 skip first element
     }
 
     return coeffs;
 }
 
+// Gives back the median value of the flattened coefficients
 float PHash::computeMedian(CoeffArray values) {
     std::sort(values.begin(), values.end());
     return values[31];
 }
 
+// Generate binary with median threshold
 uint64_t PHash::generateBinaryHash( const CoeffArray& coefficients, float median) {
     uint64_t hash = 0;
 
