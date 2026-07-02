@@ -35,21 +35,21 @@ uint64_t PHash::getPHash(const char* path) {
 
     if (!img.has_value()) {
         // Send message to log
-        Logger::logError(errorMessage);
+        Logger::error(errorMessage);
         // Return 0 to indicate failure
         return 0ULL; 
     }
 
-    ImageGrid32 dct = applyDCT(img.value());
-    ImageGrid8 block = extractTopLeft8x8(dct);
-    CoeffArray coeffs = flattenAndIgnoreDC(block);
+    PHash::ImageGrid32 dct = applyDCT(img.value());
+    PHash::ImageGrid8 block = extractTopLeft8x8(dct);
+    PHash::CoeffArray coeffs = flattenAndIgnoreDC(block);
     float median = computeMedian(coeffs);
 
     return generateBinaryHash(coeffs, median);
 }
 
 // Reads, resizes, and converts the image to grayscale
-std::optional<ImageGrid32> PHash::readAndResize(const char* path, std::string& errorOut) {
+std::optional<PHash::ImageGrid32> PHash::readAndResize(const char* path, std::string& errorOut) {
     int width, height, channels;
     
     // Force STB to load imagen in 1 canal at loading
@@ -71,7 +71,7 @@ std::optional<ImageGrid32> PHash::readAndResize(const char* path, std::string& e
     stbi_image_free(data);
 
     // Save data in ImageGrid32 format
-    ImageGrid32 output{};
+    PHash::ImageGrid32 output{};
     for (int y = 0; y < 32; ++y) {
         for (int x = 0; x < 32; ++x) {
             output[y][x] = static_cast<float>(resizedData[y * 32 + x]);
@@ -82,9 +82,9 @@ std::optional<ImageGrid32> PHash::readAndResize(const char* path, std::string& e
 }
 
 // Discrete Cosine Transform application
-ImageGrid32 PHash::applyDCT(const ImageGrid32& input) {
-    ImageGrid32 temp{};
-    ImageGrid32 output{};
+PHash::ImageGrid32 PHash::applyDCT(const ImageGrid32& input) {
+    PHash::ImageGrid32 temp{};
+    PHash::ImageGrid32 output{};
 
     // DCT rows
     for (int y = 0; y < 32; ++y) {
@@ -120,8 +120,8 @@ ImageGrid32 PHash::applyDCT(const ImageGrid32& input) {
 }
 
 // Extract top-left 8x8 low frequencies
-ImageGrid8 PHash::extractTopLeft8x8(const ImageGrid32& dctMat) {
-    ImageGrid8 block{};
+PHash::ImageGrid8 PHash::extractTopLeft8x8(const PHash::ImageGrid32& dctMat) {
+    PHash::ImageGrid8 block{};
 
     for (int y = 0; y < 8; ++y) {
         for (int x = 0; x < 8; ++x) {
@@ -133,8 +133,8 @@ ImageGrid8 PHash::extractTopLeft8x8(const ImageGrid32& dctMat) {
 }
 
 // Ignores DC coefficient and changes the 2d array to a 1d array
-CoeffArray PHash::flattenAndIgnoreDC(const ImageGrid8& block) {
-    CoeffArray coeffs{};
+PHash::CoeffArray PHash::flattenAndIgnoreDC(const PHash::ImageGrid8& block) {
+    PHash::CoeffArray coeffs{};
 
     //A two-dimensional static array stores its data in contiguous memory space
 
@@ -149,13 +149,13 @@ CoeffArray PHash::flattenAndIgnoreDC(const ImageGrid8& block) {
 }
 
 // Gives back the median value of the flattened coefficients
-float PHash::computeMedian(CoeffArray values) {
+float PHash::computeMedian(PHash::CoeffArray values) {
     std::sort(values.begin(), values.end());
     return values[31];
 }
 
 // Generate binary with median threshold
-uint64_t PHash::generateBinaryHash( const CoeffArray& coefficients, float median) {
+uint64_t PHash::generateBinaryHash( const PHash::CoeffArray& coefficients, float median) {
     uint64_t hash = 0;
 
     for (int i = 0; i < 63; ++i) {

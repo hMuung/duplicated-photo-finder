@@ -15,14 +15,15 @@ Cosine Transform (DCT), and extracts the low-frequency coefficients to build a r
 
 In case of failure (e.g., file not found or invalid format), the error is logged 
 via the internal Logger and the function returns 0ULL
- */
-
-using ImageGrid32 = std::array<std::array<float, 32>, 32>;
-using ImageGrid8  = std::array<std::array<float, 8>, 8>;
-using CoeffArray  = std::array<float, 63>;
+*/
 
 class PHash {
     private:
+        
+        using ImageGrid32 = std::array<std::array<float, 32>, 32>;
+        using ImageGrid8  = std::array<std::array<float, 8>, 8>;
+        using CoeffArray  = std::array<float, 63>;
+
         float cosTable[32][32];
 
         void initCosTable();
