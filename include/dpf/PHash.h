@@ -3,14 +3,19 @@
 #include <array>
 #include <cstdint>
 #include <string_view>
-#include <cmath>
-#include <algorithm>
-#include <stdexcept>
+#include <optional>
+#include <string>
 
 /*
-This module is meant to get the perceptual hash of a picture
--
-*/
+PHash
+Generates a 64-bit Perceptual Hash (pHash) of an image for similarity comparison
+
+This module resizes the input image, converts it to grayscale, applies a 2D Discrete 
+Cosine Transform (DCT), and extracts the low-frequency coefficients to build a robust hash.
+
+In case of failure (e.g., file not found or invalid format), the error is logged 
+via the internal Logger and the function returns 0ULL
+ */
 
 using ImageGrid32 = std::array<std::array<float, 32>, 32>;
 using ImageGrid8  = std::array<std::array<float, 8>, 8>;
@@ -22,7 +27,8 @@ private:
 
     void initCosTable();
 
-    ImageGrid32 readAndResize(std::string_view path);
+    std::optional<ImageGrid32> readAndResize(const char* path, std::string& errorOut);
+    
     ImageGrid32 applyDCT(const ImageGrid32& input);
     ImageGrid8 extractTopLeft8x8(const ImageGrid32& dctMat);
 
@@ -38,5 +44,5 @@ public:
     PHash();
     ~PHash();
 
-    uint64_t getPHash(std::string_view path);
+    uint64_t getPHash(const char* path);
 };

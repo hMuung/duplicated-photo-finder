@@ -14,9 +14,11 @@
 int main() {
     PHash  phash{};
 
+    const char* path = "assets\\testImage\\IMG_20221203_1859410439.jpg";
+
     auto inicio = std::chrono::high_resolution_clock::now();
 
-    uint64_t hash = phash.getPHash("assets\\testImage\\IMG_20221203_1859410439.jpg");
+    uint64_t hash = phash.getPHash(path);
 
     auto fin = std::chrono::high_resolution_clock::now();
 
