@@ -1,11 +1,4 @@
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb/stb_image.h"
-
 #include "dpf/PHash.h"
-
-#include <cmath>
-#include <algorithm>
-#include <stdexcept>
 
 PHash::PHash() {
     initCosTable();
@@ -13,17 +6,18 @@ PHash::PHash() {
 
 PHash::~PHash() {}
 
+// Save a cosine Look Up Table
 void PHash::initCosTable() {
     constexpr float PI = 3.14159265358979323846f;
 
     for (int u = 0; u < 32; ++u) {
         for (int x = 0; x < 32; ++x) {
-            cosTable[u][x] =
-                std::cos(((2.0f * x + 1.0f) * u * PI) / 64.0f);
+            cosTable[u][x] = ((u == 0) ? std::sqrt(1/32) : std::sqrt(2/32)) * std::cos(((2.0f*x + 1.0f)*u*PI) / 64.0f);
         }
     }
 }
 
+// Main pipeline to get the hash
 uint64_t PHash::getPHash(std::string_view path) {
     auto img = readAndResize(path);
     auto dct = applyDCT(img);
@@ -34,9 +28,11 @@ uint64_t PHash::getPHash(std::string_view path) {
     return generateBinaryHash(coeffs, median);
 }
 
+// Meant to read, resize and transform to gray scale
 ImageGrid32 PHash::readAndResize(std::string_view path) {
     int width, height, channels;
 
+    // Read image
     unsigned char* data = stbi_load(
         path.data(),
         &width,
@@ -49,6 +45,7 @@ ImageGrid32 PHash::readAndResize(std::string_view path) {
         throw std::runtime_error("Failed to load image");
     }
 
+    // Nearest Neighbor resize method
     ImageGrid32 output{};
 
     for (int y = 0; y < 32; ++y) {
@@ -66,7 +63,8 @@ ImageGrid32 PHash::readAndResize(std::string_view path) {
                 uint8_t r = data[idx];
                 uint8_t g = data[idx + 1];
                 uint8_t b = data[idx + 2];
-
+                
+                // Gray scale transformation
                 gray = 0.299f * r + 0.587f * g + 0.114f * b;
             }
 
@@ -79,11 +77,12 @@ ImageGrid32 PHash::readAndResize(std::string_view path) {
     return output;
 }
 
+// Discrete Cosine Transform aplication
 ImageGrid32 PHash::applyDCT(const ImageGrid32& input) {
     ImageGrid32 temp{};
     ImageGrid32 output{};
 
-    // DCT filas
+    // DCT rows
     for (int y = 0; y < 32; ++y) {
         for (int u = 0; u < 32; ++u) {
             float sum = 0.0f;
@@ -91,33 +90,25 @@ ImageGrid32 PHash::applyDCT(const ImageGrid32& input) {
             for (int x = 0; x < 32; ++x) {
                 sum += input[y][x] * cosTable[u][x];
             }
-
-            float cu = (u == 0) ? std::sqrt(1.0f / 32.0f)
-                                : std::sqrt(2.0f / 32.0f);
-
-            temp[y][u] = cu * sum;
+            temp[y][u] = sum;
         }
     }
 
-    // DCT columnas
-    for (int x = 0; x < 32; ++x) {
-        for (int v = 0; v < 32; ++v) {
+    // DCT columns
+    for (int v = 0; v < 32; ++v) {
+        for (int x = 0; x < 32; ++x) {
             float sum = 0.0f;
-
             for (int y = 0; y < 32; ++y) {
                 sum += temp[y][x] * cosTable[v][y];
             }
-
-            float cv = (v == 0) ? std::sqrt(1.0f / 32.0f)
-                                : std::sqrt(2.0f / 32.0f);
-
-            output[v][x] = cv * sum;
+            output[v][x] = sum; 
         }
     }
 
     return output;
 }
 
+// Conserve only low frecuencies
 ImageGrid8 PHash::extractTopLeft8x8(const ImageGrid32& dctMat) {
     ImageGrid8 block{};
 
@@ -130,28 +121,29 @@ ImageGrid8 PHash::extractTopLeft8x8(const ImageGrid32& dctMat) {
     return block;
 }
 
+// Ignores DC coeficient and changes the 2d array to a 1d array
 CoeffArray PHash::flattenAndIgnoreDC(const ImageGrid8& block) {
     CoeffArray coeffs{};
 
-    int idx = 0;
+    //A two-dimensional static array stores its data in contiguous memory space
 
-    for (int y = 0; y < 8; ++y) {
-        for (int x = 0; x < 8; ++x) {
-            if (y == 0 && x == 0)
-                continue;
+    // Point to the first element of the matrix
+    const float* src = &block[0][0];
 
-            coeffs[idx++] = block[y][x];
-        }
+    for (int i = 0; i < 63; ++i) {
+        coeffs[i] = src[i + 1]; // i + 1 skip first element
     }
 
     return coeffs;
 }
 
+// Gives back the median value of the flatten coeficients
 float PHash::computeMedian(CoeffArray values) {
     std::sort(values.begin(), values.end());
     return values[31];
 }
 
+// Generate binary with median threshold
 uint64_t PHash::generateBinaryHash( const CoeffArray& coefficients, float median) {
     uint64_t hash = 0;
 
