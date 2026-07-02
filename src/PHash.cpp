@@ -1,5 +1,8 @@
 #include "dpf/PHash.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
+
 PHash::PHash() {
     initCosTable();
 }
@@ -12,7 +15,7 @@ void PHash::initCosTable() {
 
     for (int u = 0; u < 32; ++u) {
         for (int x = 0; x < 32; ++x) {
-            cosTable[u][x] = ((u == 0) ? std::sqrt(1/32) : std::sqrt(2/32)) * std::cos(((2.0f*x + 1.0f)*u*PI) / 64.0f);
+            cosTable[u][x] = std::cos(((2.0f*x + 1.0f)*u*PI) / 64.0f);
         }
     }
 }
@@ -90,18 +93,25 @@ ImageGrid32 PHash::applyDCT(const ImageGrid32& input) {
             for (int x = 0; x < 32; ++x) {
                 sum += input[y][x] * cosTable[u][x];
             }
-            temp[y][u] = sum;
+
+            float cu = (u == 0) ? std::sqrt(1.0f / 32.0f) : std::sqrt(2.0f / 32.0f);
+
+            temp[y][u] = cu * sum;
         }
     }
 
     // DCT columns
-    for (int v = 0; v < 32; ++v) {
-        for (int x = 0; x < 32; ++x) {
+    for (int x = 0; x < 32; ++x) {
+        for (int v = 0; v < 32; ++v) {
             float sum = 0.0f;
+
             for (int y = 0; y < 32; ++y) {
                 sum += temp[y][x] * cosTable[v][y];
             }
-            output[v][x] = sum; 
+
+            float cv = (v == 0) ? std::sqrt(1.0f / 32.0f) : std::sqrt(2.0f / 32.0f);
+
+            output[v][x] = cv * sum;
         }
     }
 

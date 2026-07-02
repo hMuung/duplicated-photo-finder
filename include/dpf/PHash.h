@@ -1,15 +1,11 @@
 #pragma once
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb/stb_image.h"
-
 #include <array>
 #include <cstdint>
 #include <string_view>
 #include <cmath>
 #include <algorithm>
 #include <stdexcept>
-
 
 /*
 This module is meant to get the perceptual hash of a picture
