@@ -30,8 +30,11 @@ int main() {
     
     Logger::init();
 
-    std::string folderPath = "D:\\Documentos\\respaldo\\footos";
+    std::string folderPath;
     std::string outputFilePath = "hashes_output.txt";
+    
+    std::cout << "Enter the folder path: ";
+    std::getline(std::cin, folderPath);
 
     SafeQueue imgQueue;
     std::vector<ImageResult> results;
