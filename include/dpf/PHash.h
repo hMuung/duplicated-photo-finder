@@ -22,27 +22,27 @@ using ImageGrid8  = std::array<std::array<float, 8>, 8>;
 using CoeffArray  = std::array<float, 63>;
 
 class PHash {
-private:
-    float cosTable[32][32];
+    private:
+        float cosTable[32][32];
 
-    void initCosTable();
+        void initCosTable();
 
-    std::optional<ImageGrid32> readAndResize(const char* path, std::string& errorOut);
-    
-    ImageGrid32 applyDCT(const ImageGrid32& input);
-    ImageGrid8 extractTopLeft8x8(const ImageGrid32& dctMat);
+        std::optional<ImageGrid32> readAndResize(const char* path, std::string& errorOut);
+        
+        ImageGrid32 applyDCT(const ImageGrid32& input);
+        ImageGrid8 extractTopLeft8x8(const ImageGrid32& dctMat);
 
-    CoeffArray flattenAndIgnoreDC(const ImageGrid8& block);
-    float computeMedian(CoeffArray values);
+        CoeffArray flattenAndIgnoreDC(const ImageGrid8& block);
+        float computeMedian(CoeffArray values);
 
-    uint64_t generateBinaryHash(
-        const CoeffArray& coefficients,
-        float median
-    );
+        uint64_t generateBinaryHash(
+            const CoeffArray& coefficients,
+            float median
+        );
 
-public:
-    PHash();
-    ~PHash();
+    public:
+        PHash();
+        ~PHash();
 
-    uint64_t getPHash(const char* path);
+        uint64_t getPHash(const char* path);
 };
