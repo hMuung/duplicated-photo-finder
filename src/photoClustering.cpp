@@ -16,7 +16,7 @@ namespace fs = std::filesystem;
 
 
 const std::string INPUT_FILE = "hashes_output.txt";
-const fs::path OUTPUT_BASE_DIR = "grouped_photos";
+const fs::path OUTPUT_BASE_DIR = "groups";
 constexpr int HAMMING_THRESHOLD = 5;
 
 
@@ -26,7 +26,7 @@ struct ImageResult {
 };
 
 
-// Declaraciones de funciones
+// Function prototipes
 bool parseLine(const std::string& line, ImageResult& outResult);
 std::vector<ImageResult> loadDataset(const std::string& filePath);
 void clusterWorker(const std::vector<ImageResult>& dataset, std::vector<bool>& visited, 
@@ -40,19 +40,18 @@ void processClusters(const std::vector<ImageResult>& dataset, unsigned int numWo
 int main() {
     Logger::init();
 
-    // 1. Carga de datos de forma aislada
+    // Load data
     std::vector<ImageResult> dataset = loadDataset(INPUT_FILE);
     if (dataset.empty()) {
-        // loadDataset ya se encarga de loggear si hubo un error crítico
         return 0; 
     }
 
-    // 2. Determinación de hilos de hardware
+    // Determinate threads
     unsigned int numWorkers = std::thread::hardware_concurrency();
     if (numWorkers == 0) numWorkers = 2;
     std::cout << "Spawning " << numWorkers << " threads for parallel processing...\n";
 
-    // 3. Ejecución del algoritmo de clustering
+    // Clustering algorithm
     processClusters(dataset, numWorkers);
 
     std::cout << "\nExecution sequence complete.\n";
@@ -60,16 +59,14 @@ int main() {
 }
 
 
-// --- IMPLEMENTACIÓN DE FUNCIONES ---
-
-// Carga de manera segura el archivo plano en memoria
+// Loads plan file in memory
 std::vector<ImageResult> loadDataset(const std::string& filePath) {
     std::vector<ImageResult> dataset;
-    std::cout << "Opening metadata file: " << filePath << "...\n";
+    std::cout << "Opening data file: " << filePath << "...\n";
     std::ifstream inputFile(filePath);
     
     if (!inputFile.is_open()) {
-        Logger::error("Critical Error: Could not open " + filePath + ". File may be missing or locked.");
+        Logger::error("Critical Error: Could not open " + filePath + ", file may be missing or locked");
         std::cerr << "Critical Error: Could not open " << filePath << "\n";
         return dataset;
     }
@@ -82,21 +79,21 @@ std::vector<ImageResult> loadDataset(const std::string& filePath) {
         if (parseLine(line, res)) {
             dataset.push_back(res);
         } else {
-            // Loggeamos el error de parseo pero NO rompemos el bucle, saltamos la línea corrupta
-            Logger::warn("Malformed data pattern at line " + std::to_string(lineCount) + ": " + line);
+            // Logg parse error and continue
+            Logger::warning("Malformed data pattern at line " + std::to_string(lineCount) + ": " + line);
         }
     }
     inputFile.close();
 
-    std::cout << "Successfully parsed " << dataset.size() << " records.\n";
+    std::cout << "Successfully parsed " << dataset.size() << " records\n";
     if (dataset.empty()) {
-        Logger::warn("The dataset file " + filePath + " was read successfully but contained no valid imagery hashes.");
+        Logger::warning("The dataset file " + filePath + " was read successfully but contained no valid hashes");
     }
     
     return dataset;
 }
 
-// Orquesta el bucle de clustering a través de todo el dataset
+// Clustering loop
 void processClusters(const std::vector<ImageResult>& dataset, unsigned int numWorkers) {
     size_t numImages = dataset.size();
     std::vector<bool> visited(numImages, false);
@@ -110,10 +107,10 @@ void processClusters(const std::vector<ImageResult>& dataset, unsigned int numWo
         visited[i] = true;
         currentGroup.push_back(dataset[i].path);
 
-        // Delegamos la creación de hilos para este cluster específico
+        // Create thread for specific cluster
         processSingleCluster(dataset, visited, currentGroup, i, numWorkers, mtx);
 
-        // Delegamos el movimiento físico de archivos en disco si el grupo es válido
+        // Move file if group is valid
         if (currentGroup.size() > 1) {
             moveClusterFiles(currentGroup, groupCounter++);
         }
@@ -122,11 +119,10 @@ void processClusters(const std::vector<ImageResult>& dataset, unsigned int numWo
     Logger::info("Clustering finished. Total groups created: " + std::to_string(groupCounter - 1));
 }
 
-// Maneja el ciclo de vida de los hilos esclavos para un cluster individual
+// Handles the slave thread lifecycle for an individual cluster
 void processSingleCluster(const std::vector<ImageResult>& dataset, std::vector<bool>& visited, 
-                          std::vector<std::string>& currentGroup, size_t anchorIdx, 
-                          unsigned int numWorkers, std::mutex& mtx) {
-    
+    std::vector<std::string>& currentGroup, size_t anchorIdx, unsigned int numWorkers, std::mutex& mtx) {
+
     size_t numImages = dataset.size();
     uint64_t anchorHash = dataset[anchorIdx].hash;
     size_t totalRemaining = numImages - (anchorIdx + 1);
@@ -152,6 +148,7 @@ void processSingleCluster(const std::vector<ImageResult>& dataset, std::vector<b
 }
 
 // Mueve de manera segura las fotos agrupadas interceptando errores de I/O
+// Move photo clusters
 void moveClusterFiles(const std::vector<std::string>& currentGroup, size_t groupId) {
     fs::path groupFolder = OUTPUT_BASE_DIR / ("group_" + std::to_string(groupId));
     
@@ -166,13 +163,11 @@ void moveClusterFiles(const std::vector<std::string>& currentGroup, size_t group
                 fs::rename(origPath, destPath); 
                 std::cout << "  -> Relocated: " << origPath.filename() << "\n";
             } else {
-                // El archivo no existe en el disco, registramos advertencia sin crashear el programa
-                Logger::warn("File missing from OS storage during migration: " + origPathStr);
+                Logger::warning("File missing from OS storage during migration: " + origPathStr);
                 std::cerr << "  -> File skipped (Not found on system): " << origPathStr << "\n";
             }
         }
     } catch (const fs::filesystem_error& e) {
-        // Captura errores graves del S.O. (Sin espacio, falta de permisos de escritura, etc.)
         Logger::error("OS Filesystem failure on group " + std::to_string(groupId) + ". Reason: " + e.what());
         std::cerr << "Filesystem Error occurred processing group: " << e.what() << "\n";
     }
@@ -192,14 +187,12 @@ bool parseLine(const std::string& line, ImageResult& outResult) {
         outResult.path = pathStr;
         return true;
     } catch (...) {
-        // Cambiado de Logger::error a return false, delegando el log detallado a loadDataset
         return false; 
     }
 }
 
-void clusterWorker(const std::vector<ImageResult>& dataset, 
-    std::vector<bool>& visited, std::vector<std::string>& currentGroup, 
-    uint64_t anchorHash, size_t startIdx,  size_t endIdx, std::mutex& mtx) {
+void clusterWorker(const std::vector<ImageResult>& dataset, std::vector<bool>& visited, 
+    std::vector<std::string>& currentGroup, uint64_t anchorHash, size_t startIdx, size_t endIdx, std::mutex& mtx) {
 
     std::vector<std::string> localMatches;
 

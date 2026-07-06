@@ -68,13 +68,3 @@ Step 8: Generate binary hash
 11–15 → possible match
 16+   → usually different
 ```
-
----
-
-For large databases, pHash is often combined with:
-
-* BK-trees
-* VP-trees
-* LSH (Locality Sensitive Hashing)
-
-to search millions of hashes efficiently.
