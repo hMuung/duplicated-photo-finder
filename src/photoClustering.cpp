@@ -54,7 +54,7 @@ int main() {
     // Clustering algorithm
     processClusters(dataset, numWorkers);
 
-    std::cout << "\nExecution sequence complete.\n";
+    std::cout << "\nExecution sequence complete\n";
     return 0;
 }
 
@@ -147,14 +147,13 @@ void processSingleCluster(const std::vector<ImageResult>& dataset, std::vector<b
     }
 }
 
-// Mueve de manera segura las fotos agrupadas interceptando errores de I/O
 // Move photo clusters
 void moveClusterFiles(const std::vector<std::string>& currentGroup, size_t groupId) {
     fs::path groupFolder = OUTPUT_BASE_DIR / ("group_" + std::to_string(groupId));
     
     try {
         fs::create_directories(groupFolder);
-        std::cout << "\n[Group " << groupId << "] Found " << currentGroup.size() << " visually close photos.\n";
+        std::cout << "\n[Group " << groupId << "] Found " << currentGroup.size() << " visually close photos\n";
         
         for (const auto& origPathStr : currentGroup) {
             fs::path origPath(origPathStr);
